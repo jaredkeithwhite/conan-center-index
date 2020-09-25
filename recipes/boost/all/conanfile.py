@@ -90,7 +90,7 @@ class BoostConan(ConanFile):
     for libname in lib_list:
         if libname != "python":
             default_options.update({"without_%s" % libname: False})
-    default_options.update({"without_python": True})
+    default_options.update({"without_python": True, "without_test": True})
     short_paths = True
     no_copy_source = True
     exports_sources = ['patches/*']
@@ -949,5 +949,5 @@ class BoostConan(ConanFile):
 
         self.env_info.BOOST_ROOT = self.package_folder
         self.cpp_info.bindirs.append("lib")
-        self.cpp_info.names["cmake_find_package"] = "Boost"
-        self.cpp_info.names["cmake_find_package_multi"] = "Boost"
+        self.cpp_info.names["cmake_find_package"] = "boost"
+        self.cpp_info.names["cmake_find_package_multi"] = "boost"
