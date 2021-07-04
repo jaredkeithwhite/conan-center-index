@@ -29,11 +29,6 @@ class LibiconvConan(ConanFile):
     def _is_msvc(self):
         return self.settings.compiler == "Visual Studio"
 
-    def build_requirements(self):
-        if tools.os_info.is_windows and "CONAN_BASH_PATH" not in os.environ \
-                and tools.os_info.detect_windows_subsystem() != "msys2":
-            self.build_requires("msys2/20190524")
-
     def config_options(self):
         if self.settings.os == "Windows":
             del self.options.fPIC
@@ -44,10 +39,12 @@ class LibiconvConan(ConanFile):
         del self.settings.compiler.libcxx
         del self.settings.compiler.cppstd
 
+    def build_requirements(self):
+        if tools.os_info.is_windows and not tools.get_env("CONAN_BASH_PATH"):
+            self.build_requires("msys2/20200517")
+
     def source(self):
-        tools.get(**self.conan_data["sources"][self.version])
-        archive_name = "{0}-{1}".format(self.name, self.version)
-        os.rename(archive_name, self._source_subfolder)
+        tools.get(**self.conan_data["sources"][self.version], destination=self._source_subfolder, strip_root=True)
 
     @contextmanager
     def _build_context(self):
@@ -96,13 +93,6 @@ class LibiconvConan(ConanFile):
             elif self.settings.arch == "x86_64":
                 host = "x86_64-w64-mingw32"
 
-        #
-        # If you pass --build when building for iPhoneSimulator, the configure script halts.
-        # So, disable passing --build by setting it to False.
-        #
-        if self.settings.os == "iOS" and self.settings.arch == "x86_64":
-            build = False
-
         self._autotools = AutoToolsBuildEnvironment(self, win_bash=tools.os_info.is_windows)
 
         configure_args = []
@@ -137,12 +127,15 @@ class LibiconvConan(ConanFile):
         os.unlink(os.path.join(self.package_folder, "lib", "libiconv.la"))
         tools.rmdir(os.path.join(self.package_folder, "share"))
 
+        if self._is_msvc and self.options.shared:
+            for import_lib in ["iconv", "charset"]:
+                tools.rename(os.path.join(self.package_folder, "lib", "{}.dll.lib".format(import_lib)),
+                             os.path.join(self.package_folder, "lib", "{}.lib".format(import_lib)))
+
     def package_info(self):
         self.cpp_info.names["cmake_find_package"] = "Iconv"
         self.cpp_info.names["cmake_find_package_multi"] = "Iconv"
         self.cpp_info.libs = ["iconv", "charset"]
-        if self._is_msvc and self.options.shared:
-            self.cpp_info.libs = [lib + ".dll.lib" for lib in self.cpp_info.libs]
 
         binpath = os.path.join(self.package_folder, "bin")
         self.output.info("Appending PATH environment var: {}".format(binpath))

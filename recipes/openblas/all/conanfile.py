@@ -1,4 +1,5 @@
 from conans import ConanFile, CMake, tools
+from conans.errors import ConanInvalidConfiguration
 import os
 
 
@@ -39,17 +40,24 @@ class OpenblasConan(ConanFile):
         if self.settings.os == "Windows":
             del self.options.fPIC
 
+    def configure(self):
+        if self.options.shared:
+            del self.options.fPIC
+
+    def validate(self):
+        if hasattr(self, 'settings_build') and tools.cross_building(self, skip_x64_x86=True):
+            raise ConanInvalidConfiguration("Cross-building not implemented")
+
     def source(self):
-        tools.get(**self.conan_data["sources"][self.version])
-        os.rename('OpenBLAS-{}'.format(self.version), self._source_subfolder)
+        tools.get(**self.conan_data["sources"][self.version], strip_root=True, destination=self._source_subfolder)
 
     def _configure_cmake(self):
         if self._cmake:
             return self._cmake
         self._cmake = CMake(self)
+        
         if self.options.build_lapack:
             self.output.warn("Building with lapack support requires a Fortran compiler.")
-
         self._cmake.definitions["NOFORTRAN"] = not self.options.build_lapack
         self._cmake.definitions["BUILD_WITHOUT_LAPACK"] = not self.options.build_lapack
         self._cmake.definitions["DYNAMIC_ARCH"] = self.options.dynamic_arch
@@ -79,13 +87,24 @@ class OpenblasConan(ConanFile):
         tools.rmdir(os.path.join(self.package_folder, "share"))
 
     def package_info(self):
-        self.env_info.OpenBLAS_HOME = self.package_folder
-        self.cpp_info.libs = tools.collect_libs(self)
-        if self.settings.os == "Linux":
-            if self.options.use_thread:
-                self.cpp_info.system_libs.append("pthread")
-            if self.options.build_lapack:
-                self.cpp_info.system_libs.append("gfortran")
+        # CMake config file:
+        # - OpenBLAS always has one and only one of these components: openmp, pthread or serial.
+        # - Whatever if this component is requested or not, official CMake imported target is always OpenBLAS::OpenBLAS
+        # - TODO: add openmp component when implemented in this recipe
         self.cpp_info.names["cmake_find_package"] = "OpenBLAS"
         self.cpp_info.names["cmake_find_package_multi"] = "OpenBLAS"
-        self.cpp_info.names['pkg_config'] = "OpenBLAS"
+        self.cpp_info.names["pkg_config"] = "openblas"
+        cmake_component_name = "pthread" if self.options.use_thread else "serial"
+        self.cpp_info.components["openblas_component"].names["cmake_find_package"] = cmake_component_name
+        self.cpp_info.components["openblas_component"].names["cmake_find_package_multi"] = cmake_component_name
+        self.cpp_info.components["openblas_component"].names["pkg_config"] = "openblas"
+        self.cpp_info.components["openblas_component"].includedirs.append(os.path.join("include", "openblas"))
+        self.cpp_info.components["openblas_component"].libs = tools.collect_libs(self)
+        if self.settings.os == "Linux":
+            if self.options.use_thread:
+                self.cpp_info.components["openblas_component"].system_libs.append("pthread")
+            if self.options.build_lapack:
+                self.cpp_info.components["openblas_component"].system_libs.append("gfortran")
+
+        self.output.info("Setting OpenBLAS_HOME environment variable: {}".format(self.package_folder))
+        self.env_info.OpenBLAS_HOME = self.package_folder

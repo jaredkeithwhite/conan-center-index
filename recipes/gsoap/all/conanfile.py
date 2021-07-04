@@ -37,10 +37,7 @@ class ConanFileDefault(ConanFile):
 
 
     def source(self):
-        tools.get(**self.conan_data["sources"][self.version])
-        # Rename to "source_subfolder" is a convention to simplify later steps
-        extracted_dir = "gsoap-" + self.version[:self.version.rindex('.')]
-        os.rename(extracted_dir, self._source_subfolder)
+        tools.get(**self.conan_data["sources"][self.version], destination=self._source_subfolder, strip_root=True)
 
     def build(self):
         cmake = self._configure_cmake()
@@ -55,7 +52,7 @@ class ConanFileDefault(ConanFile):
 
     def requirements(self):
         if self.options.with_openssl:
-            self.requires("openssl/1.1.1g")
+            self.requires("openssl/1.1.1h")
             self.requires("zlib/1.2.11")
 
     def _configure_cmake(self):
